@@ -3,10 +3,9 @@ module division23(enable, A,B,Res, done);
     input enable;
     input [23:0] A;
     input [23:0] B;
-    output [13:0] Res;
-    output done;
+    output reg [13:0] Res;
+    output reg done;
 
-    reg [23:0] Res = 0;
     reg [23:0] a1,b1;
     reg [24:0] p1;
     integer i;
@@ -44,18 +43,18 @@ module controller (enable, dout, din, adr, ren, wen, clk);
     input [9:0] adr;
     input ren,wen,clk,enable;
 
-    memory RAM(enable, dout, din, adr, ren, wen, clk);
+    memory RAM(enable, dout, din, adr, ren, wen, clok);
 
 endmodule // controller
-module memory(enable, dout, din, adr, ren, wen, clk);
-    output [30:0] dout;
+module memory(enable, dout, din, adr, ren, wen, clok);
+    output reg [30:0] dout;
     input [30:0] din;
     input [9:0] adr;
-    input ren,wen,clk,enable;
+    input ren,wen,clok,enable;
 
-    reg [30:0]storage[0:1000]
+    reg [30:0]storage[0:1000];
 
-    always @ (posedge clk) begin
+    always @ (posedge clok) begin
         if (enable) begin
             if (adr > 10'd1000) begin
                 //do nothing
@@ -76,10 +75,13 @@ module euclidean(data_x,data_y,centroid_x,centroid_y,enable,clk,dis);
     input clk;
     input [13:0] data_x,data_y,centroid_x,centroid_y;
     reg [13:0] diff_x,diff_y;
-    wire [13:0] sqr_x,sqr_y;
-    output reg [13:0] dis;
+    wire [27:0] sqr_x,sqr_y;
+    output reg [27:0] dis;
     reg [13:0] TEMP_X,TEMP_Y;
     reg [13:0]temp_x, temp_y;
+
+    mymult14 mul_x(diff_x,diff_x,sqr_x);
+    mymult14 mul_y(diff_y,diff_y,sqr_y);
 
     always@(*)
     begin
@@ -92,11 +94,9 @@ module euclidean(data_x,data_y,centroid_x,centroid_y,enable,clk,dis);
 
         diff_x = TEMP_X - temp_x;
         diff_y = TEMP_Y - temp_y;
-        mymult14(diff_x,diff_x,sqr_x);
-        mymult14(diff_y,diff_y,sqr_y);
+
         dis = sqr_x + sqr_y;
 
-        address = address + 10'd1;
        end
 
 endmodule
@@ -105,11 +105,10 @@ endmodule
 module mymult14(A,B,AmulB );
 input [13:0] A;
 input [13:0] B;
-output [27:0] AmulB;
+output reg [27:0] AmulB;
 
 
 reg [27:0] R;
-reg [13:0] AmulB;
 reg [13:0] C;
 reg [13:0] D;
 reg [25:0] Y;   //  used in intermediate steps to store the arithmetic shift left of C
@@ -162,21 +161,24 @@ endmodule //mymult14
 
 module assign_cluster (enable, clk, cluster_A_x, cluster_A_y, cluster_B_x, cluster_B_y, cluster_C_x, cluster_C_y, cluster_D_x, cluster_D_y, cluster_E_x, cluster_E_y, done);
     input enable, clk;
+    input [13:0] cluster_A_x, cluster_A_y, cluster_B_x, cluster_B_y, cluster_C_x, cluster_C_y, cluster_D_x, cluster_D_y, cluster_E_x, cluster_E_y;
+    output reg done;
 
     reg [9:0] address = 10'd0;
     reg rwen = 1'b1;
-    reg [30:0] mem_read, mem_write;
+    reg [30:0] mem_write;
     reg [13:0]temp_X, temp_Y;
     reg [2:0]cluster;
-    reg [27:0] disA, disB, disC, disD, disE;
-    reg done = 1'b0;
+    wire [27:0] disA, disB, disC, disD, disE;
+    wire [30:0] mem_read;
 
-    euclidean A(temp_X,temp_Y,cluster_A_x, cluster_A_y,enable,clk,disA);
-    euclidean B(temp_X,temp_Y,cluster_B_x, cluster_B_y,enable,clk,disB);
-    euclidean C(temp_X,temp_Y,cluster_C_x, cluster_C_y,enable,clk,disC);
-    euclidean D(temp_X,temp_Y,cluster_D_x, cluster_D_y,enable,clk,disD);
-    euclidean E(temp_X,temp_Y,cluster_E_x, cluster_E_y,enable,clk,disE);
-    controller a_cluster(mem_read, mem_write, address, rwen, ~rwen, clk);
+
+    euclidean A_cluster(temp_X,temp_Y,cluster_A_x, cluster_A_y,enable,clk,disA);
+    euclidean B_cluster(temp_X,temp_Y,cluster_B_x, cluster_B_y,enable,clk,disB);
+    euclidean C_cluster(temp_X,temp_Y,cluster_C_x, cluster_C_y,enable,clk,disC);
+    euclidean D_cluster(temp_X,temp_Y,cluster_D_x, cluster_D_y,enable,clk,disD);
+    euclidean E_cluster(temp_X,temp_Y,cluster_E_x, cluster_E_y,enable,clk,disE);
+    controller asgn_cluster(enable, mem_read, mem_write, address, rwen, ~rwen, clk);
     always @ (posedge clk) begin                                                // find the centroid which is closests and assign that cluster to the point
         if (enable) begin
             temp_X = mem_read[30:17];
@@ -211,12 +213,13 @@ module assign_cluster (enable, clk, cluster_A_x, cluster_A_y, cluster_B_x, clust
         end else begin                                                          // when enable is low we reset
             address = 10'd0;
             done = 1'b0;
+        end
     end
 
 endmodule // assign_cluster
 
 module get_sum(enable, clk, A_sum_x, B_sum_x, C_sum_x, D_sum_x, E_sum_x, A_sum_y, B_sum_y, C_sum_y, D_sum_y, E_sum_y, A_count, B_count, C_count, D_count, E_count,addition_done);
-    input enable;
+    input enable, clk;
     output reg[23:0] A_sum_x = 24'd0, B_sum_x = 24'd0, C_sum_x = 24'd0, D_sum_x = 24'd0, E_sum_x = 24'd0;
     output reg[23:0] A_sum_y = 24'd0, B_sum_y = 24'd0, C_sum_y = 24'd0, D_sum_y = 24'd0, E_sum_y = 24'd0;                            //the sum is 24 bits long to account for overflow.
     output reg[13:0] A_count = 14'd0, B_count = 14'd0, C_count = 14'd0, D_count = 14'd0, E_count = 14'd0;
@@ -224,8 +227,9 @@ module get_sum(enable, clk, A_sum_x, B_sum_x, C_sum_x, D_sum_x, E_sum_x, A_sum_y
 
     reg [13:0]temp_X, temp_Y;
     reg [2:0]cluster;
-    reg [30:0] mem_read;
+    wire [30:0] mem_read;
     reg [9:0] address = 10'd0;
+    reg tmp;
 
     controller g_sum(enable, mem_read, 31'd0, address, 1'b1, 1'b0, clk);
     always @ (mem_read) begin                                                   // this always block will run when mem_read changes
@@ -243,28 +247,31 @@ module get_sum(enable, clk, A_sum_x, B_sum_x, C_sum_x, D_sum_x, E_sum_x, A_sum_y
                     B_sum_x = B_sum_x + temp_X;
                     B_sum_y = B_sum_y + temp_Y;
                     B_count = B_count + 14'd1;
-                end ;
+                end
                 3'd2: begin
                     C_sum_x = C_sum_x + temp_X;
                     C_sum_y = C_sum_y + temp_Y;
                     C_count = C_count + 14'd1;
-                end ;
+                end
                 3'd3: begin
                     D_sum_x = D_sum_x + temp_X;
                     D_sum_y = D_sum_y + temp_Y;
                     D_count = D_count + 14'd1;
-                end ;
+                end
                 3'd4: begin
                     E_sum_x = E_sum_x + temp_X;
                     E_sum_y = E_sum_y + temp_Y;
                     E_count = E_count + 14'd1;
-                end ;
-                default: ;//invalid cluster;
-                address = address + 10'd1;
-                if (address == 10'd1001) begin
-                    addition_done = 1'b1;
                 end
+                default: begin
+                    tmp = 0;
+                end
+
             endcase
+            address = address + 10'd1;
+            if (address == 10'd1001) begin
+                addition_done = 1'b1;
+            end
         end else begin
             addition_done = 1'b0;
         end
@@ -275,14 +282,15 @@ endmodule // get_sum
 module kmeans (enable, clk);
     input enable, clk;
 
-    reg [13:0] Cluster_A_x = 13'd0, Cluster_A_y = 13'd0, Cluster_B_x = 13'd0, Cluster_B_y = 13'd10000, Cluster_C_x = 13'd10000, Cluster_C_y = 13'd0, Cluster_D_x = 13'd10000, Cluster_D_y = 13'd10000, Cluster_E_x = 13'd5000, Cluster_E_y = 13'd5000,
-    reg assign_enable, assign_done, sum_enable, sum_done, update_enable, update_done;
-    reg upd_clus_dne_Ax,upd_clus_dne_Bx,upd_clus_dne_Cx,upd_clus_dne_Dx,upd_clus_dne_Ex, upd_clus_dne_Ay,upd_clus_dne_By,upd_clus_dne_Cy,upd_clus_dne_Dy,upd_clus_dne_Ey;
+    wire [13:0] Cluster_A_x = 14'd0, Cluster_A_y = 14'd0, Cluster_B_x = 14'd0, Cluster_B_y = 14'd10000, Cluster_C_x = 14'd10000, Cluster_C_y = 14'd0, Cluster_D_x = 14'd10000, Cluster_D_y = 14'd10000, Cluster_E_x = 14'd5000, Cluster_E_y = 14'd5000;
+    reg assign_enable, sum_enable, update_enable, update_done;
+    wire upd_clus_dne_Ax,upd_clus_dne_Bx,upd_clus_dne_Cx,upd_clus_dne_Dx,upd_clus_dne_Ex, upd_clus_dne_Ay,upd_clus_dne_By,upd_clus_dne_Cy,upd_clus_dne_Dy,upd_clus_dne_Ey;
     wire [23:0] A_sum_X, B_sum_X, C_sum_X, D_sum_X, E_sum_X, A_sum_Y, B_sum_Y, C_sum_Y, D_sum_Y, E_sum_Y;
     wire [13:0] A_Count, B_Count, C_Count, D_Count, E_Count;
+    wire assign_done, sum_done;
     integer i;
 
-    assign_cluster assign(assign_enable, clk, Cluster_A_x, Cluster_A_y, Cluster_B_x, Cluster_B_y, Cluster_C_x, Cluster_C_y, Cluster_D_x, Cluster_D_y, Cluster_E_x, Cluster_E_y, assign_done);
+    assign_cluster cluster(assign_enable, clk, Cluster_A_x, Cluster_A_y, Cluster_B_x, Cluster_B_y, Cluster_C_x, Cluster_C_y, Cluster_D_x, Cluster_D_y, Cluster_E_x, Cluster_E_y, assign_done);
 
     get_sum sum(sum_enable, clk, A_sum_X, B_sum_X, C_sum_X, D_sum_X, E_sum_X, A_sum_Y, B_sum_Y, C_sum_Y, D_sum_Y, E_sum_Y, A_Count, B_Count, C_Count, D_Count, E_Count,sum_done);
 
@@ -307,7 +315,7 @@ module kmeans (enable, clk);
                 sum_enable = 1'b0;
                 update_enable = 1'b1;
             end
-            if (upd_clus_dne_Ax == 1'b1,upd_clus_dne_Bx == 1'b1,upd_clus_dne_Cx == 1'b1,upd_clus_dne_Dx == 1'b1,upd_clus_dne_Ex == 1'b1, upd_clus_dne_Ay == 1'b1,upd_clus_dne_By == 1'b1,upd_clus_dne_Cy == 1'b1,upd_clus_dne_Dy == 1'b1,upd_clus_dne_Ey == 1'b1) begin
+            if (upd_clus_dne_Ax == 1'b1 && upd_clus_dne_Bx == 1'b1 && upd_clus_dne_Cx == 1'b1 && upd_clus_dne_Dx == 1'b1 && upd_clus_dne_Ex == 1'b1 && upd_clus_dne_Ay == 1'b1 && upd_clus_dne_By == 1'b1 && upd_clus_dne_Cy == 1'b1 && upd_clus_dne_Dy == 1'b1 && upd_clus_dne_Ey == 1'b1) begin
                 update_done = 1'b1;
             end
             if(update_done) begin
