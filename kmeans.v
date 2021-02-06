@@ -37,6 +37,16 @@ module division23(enable, A,B,Res, done);
 
 endmodule
 
+module controller (enable, dout, din, adr, ren, wen, clk);
+
+    output [30:0] dout;
+    input [30:0] din;
+    input [9:0] adr;
+    input ren,wen,clk,enable;
+
+    memory RAM(enable, dout, din, adr, ren, wen, clk);
+
+endmodule // controller
 module memory(enable, dout, din, adr, ren, wen, clk);
     output [30:0] dout;
     input [30:0] din;
@@ -50,9 +60,9 @@ module memory(enable, dout, din, adr, ren, wen, clk);
             if (adr > 10'd1000) begin
                 //do nothing
             end else if (ren == 1'd1 && wen == 1'd0) begin
-                dout = storage[adr]
+                dout = storage[adr];
             end else if (ren == 1'd0 && wen == 1'd1) begin
-                storage[adr] = din
+                storage[adr] = din;
             end else begin
                 //if ren and wen are the same do nothing
             end
@@ -82,8 +92,8 @@ module euclidean(data_x,data_y,centroid_x,centroid_y,enable,clk,dis);
 
         diff_x = TEMP_X - temp_x;
         diff_y = TEMP_Y - temp_y;
-        mymult(diff_x,diff_x,sqr_x);
-        mymult(diff_y,diff_y,sqr_y);
+        mymult14(diff_x,diff_x,sqr_x);
+        mymult14(diff_y,diff_y,sqr_y);
         dis = sqr_x + sqr_y;
 
         address = address + 10'd1;
@@ -166,25 +176,25 @@ module assign_cluster (enable, clk, cluster_A_x, cluster_A_y, cluster_B_x, clust
     euclidean C(temp_X,temp_Y,cluster_C_x, cluster_C_y,enable,clk,disC);
     euclidean D(temp_X,temp_Y,cluster_D_x, cluster_D_y,enable,clk,disD);
     euclidean E(temp_X,temp_Y,cluster_E_x, cluster_E_y,enable,clk,disE);
-    memory a_cluster(mem_read, mem_write, address, rwen, ~rwen, clk);
-    always @ (posedge clk) begin
+    controller a_cluster(mem_read, mem_write, address, rwen, ~rwen, clk);
+    always @ (posedge clk) begin                                                // find the centroid which is closests and assign that cluster to the point
         if (enable) begin
             temp_X = mem_read[30:17];
             temp_Y = mem_read[16:3];
             cluster = mem_read[2:0];
-            if (disA > disB && disA > disC && disA > disD && disA > disE) begin
+            if (disA < disB && disA < disC && disA < disD && disA < disE) begin
                 cluster = 3'd0;
                 mem_write = {temp_X, temp_Y, cluster};
                 rwen = 1'b0;
-            end else if (disB > disC && disB > disD && disB > disE) begin
+            end else if (disB < disC && disB < disD && disB < disE) begin
                 cluster = 3'd1;
                 mem_write = {temp_X, temp_Y, cluster};
                 rwen = 1'b0;
-            end else if (disC > disD && disC > disE) begin
+            end else if (disC < disD && disC < disE) begin
                 cluster = 3'd2;
                 mem_write = {temp_X, temp_Y, cluster};
                 rwen = 1'b0;
-            end else if (disD > disE) begin
+            end else if (disD < disE) begin
                 cluster = 3'd3;
                 mem_write = {temp_X, temp_Y, cluster};
                 rwen = 1'b0;
@@ -217,7 +227,7 @@ module get_sum(enable, clk, A_sum_x, B_sum_x, C_sum_x, D_sum_x, E_sum_x, A_sum_y
     reg [30:0] mem_read;
     reg [9:0] address = 10'd0;
 
-    memory g_sum(enable, mem_read, 31'd0, address, 1'b1, 1'b0, clk);
+    controller g_sum(enable, mem_read, 31'd0, address, 1'b1, 1'b0, clk);
     always @ (mem_read) begin                                                   // this always block will run when mem_read changes
         if (enable) begin
             temp_X = mem_read[30:17];
@@ -263,13 +273,19 @@ module get_sum(enable, clk, A_sum_x, B_sum_x, C_sum_x, D_sum_x, E_sum_x, A_sum_y
 endmodule // get_sum
 
 module kmeans (enable, clk);
+    input enable, clk;
+
     reg [13:0] Cluster_A_x = 13'd0, Cluster_A_y = 13'd0, Cluster_B_x = 13'd0, Cluster_B_y = 13'd10000, Cluster_C_x = 13'd10000, Cluster_C_y = 13'd0, Cluster_D_x = 13'd10000, Cluster_D_y = 13'd10000, Cluster_E_x = 13'd5000, Cluster_E_y = 13'd5000,
     reg assign_enable, assign_done, sum_enable, sum_done, update_enable, update_done;
     reg upd_clus_dne_Ax,upd_clus_dne_Bx,upd_clus_dne_Cx,upd_clus_dne_Dx,upd_clus_dne_Ex, upd_clus_dne_Ay,upd_clus_dne_By,upd_clus_dne_Cy,upd_clus_dne_Dy,upd_clus_dne_Ey;
     wire [23:0] A_sum_X, B_sum_X, C_sum_X, D_sum_X, E_sum_X, A_sum_Y, B_sum_Y, C_sum_Y, D_sum_Y, E_sum_Y;
     wire [13:0] A_Count, B_Count, C_Count, D_Count, E_Count;
+    integer i;
+
     assign_cluster assign(assign_enable, clk, Cluster_A_x, Cluster_A_y, Cluster_B_x, Cluster_B_y, Cluster_C_x, Cluster_C_y, Cluster_D_x, Cluster_D_y, Cluster_E_x, Cluster_E_y, assign_done);
+
     get_sum sum(sum_enable, clk, A_sum_X, B_sum_X, C_sum_X, D_sum_X, E_sum_X, A_sum_Y, B_sum_Y, C_sum_Y, D_sum_Y, E_sum_Y, A_Count, B_Count, C_Count, D_Count, E_Count,sum_done);
+
     division23 update_clusterAx(update_enable, A_sum_X, {10'd0,A_Count}, Cluster_A_x, upd_clus_dne_Ax);
     division23 update_clusterAy(update_enable, A_sum_Y, {10'd0,A_Count}, Cluster_A_y, upd_clus_dne_Ay);
     division23 update_clusterBx(update_enable, B_sum_X, {10'd0,B_Count}, Cluster_B_x, upd_clus_dne_Bx);
@@ -280,22 +296,39 @@ module kmeans (enable, clk);
     division23 update_clusterDy(update_enable, D_sum_Y, {10'd0,D_Count}, Cluster_D_y, upd_clus_dne_Dy);
     division23 update_clusterEx(update_enable, E_sum_X, {10'd0,E_Count}, Cluster_E_x, upd_clus_dne_Ex);
     division23 update_clusterEy(update_enable, E_sum_Y, {10'd0,E_Count}, Cluster_E_y, upd_clus_dne_Ey);
-    always @ ( * ) begin
+
+    always @ ( * ) begin                                                        // this always block sets the sequence in wich the modules will work. and resets when enable is low.
         if (enable) begin
             if (assign_done) begin
                 assign_enable = 1'b0;
                 sum_enable = 1'b1;
             end
             if (sum_done) begin
-                update_enable = 1'b0;
+                sum_enable = 1'b0;
+                update_enable = 1'b1;
             end
             if (upd_clus_dne_Ax == 1'b1,upd_clus_dne_Bx == 1'b1,upd_clus_dne_Cx == 1'b1,upd_clus_dne_Dx == 1'b1,upd_clus_dne_Ex == 1'b1, upd_clus_dne_Ay == 1'b1,upd_clus_dne_By == 1'b1,upd_clus_dne_Cy == 1'b1,upd_clus_dne_Dy == 1'b1,upd_clus_dne_Ey == 1'b1) begin
                 update_done = 1'b1;
+            end
+            if(update_done) begin
+                update_enable = 1'b0;
             end
         end else begin
             assign_enable = 1'b0;
             sum_enable = 1'b0;
             update_enable = 1'b0;
+        end
+    end
+    always @ ( posedge enable ) begin                                           // when enable goes high assign enable also goes high
+        assign_enable = 1'b1;
+    end
+    always @ ( * ) begin                                                        // in this always block the loop is set such the the secquence of moules work more than once to get more accurate result
+        if (enable) begin
+            for(i=0;i<10;i=i+1) begin
+                if (update_done) begin
+                    assign_enable = 1'b1;
+                end
+            end
         end
 
     end
